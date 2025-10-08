@@ -18,10 +18,9 @@ export class UsersService {
 
   async create(createUserDto: CreateUserDto): Promise<UserResponseDto> {
     // Check if user with email already exists
-    const existingUser: import('@prisma/client').User | null =
-      await this.prisma.user.findUnique({
-        where: { email: createUserDto.email },
-      });
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email: createUserDto.email },
+    });
 
     if (existingUser) {
       throw new ConflictException('User with this email already exists');
@@ -55,7 +54,7 @@ export class UsersService {
   }
 
   async findAll(): Promise<UserResponseDto[]> {
-    const users: UserResponseDto[] = await this.prisma.user.findMany({
+    const users = (await this.prisma.user.findMany({
       where: { isActive: true },
       select: {
         id: true,
@@ -67,13 +66,13 @@ export class UsersService {
         updatedAt: true,
       },
       orderBy: { createdAt: 'desc' },
-    });
+    })) as UserResponseDto[];
 
     return users;
   }
 
   async findOne(id: number): Promise<UserResponseDto> {
-    const user: UserResponseDto | null = await this.prisma.user.findFirst({
+    const user = (await this.prisma.user.findFirst({
       where: { id, isActive: true },
       select: {
         id: true,
@@ -84,7 +83,7 @@ export class UsersService {
         createdAt: true,
         updatedAt: true,
       },
-    });
+    })) as UserResponseDto | null;
 
     if (!user) {
       throw new NotFoundException(`User with ID ${id} not found`);
