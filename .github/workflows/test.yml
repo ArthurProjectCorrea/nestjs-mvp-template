@@ -3,7 +3,7 @@ name: Test Suite
 on:
   workflow_dispatch:
   push:
-    branches: [main, develop, feature/*, bugfix/*, hotfix/*]
+    branches: [main, develop]
   pull_request:
     branches: [main, develop]
 
@@ -20,8 +20,7 @@ jobs:
           POSTGRES_DB: nestjs_mvp_db
         ports:
           - 5432:5432
-        options: >
-          --health-cmd="pg_isready -U postgres" --health-interval=10s --health-timeout=5s --health-retries=5
+        options: '--health-cmd="pg_isready -U postgres" --health-interval=10s --health-timeout=5s --health-retries=5'
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v2
@@ -52,8 +51,7 @@ jobs:
           POSTGRES_DB: nestjs_mvp_db
         ports:
           - 5432:5432
-        options: >
-          --health-cmd="pg_isready -U postgres" --health-interval=10s --health-timeout=5s --health-retries=5
+        options: '--health-cmd="pg_isready -U postgres" --health-interval=10s --health-timeout=5s --health-retries=5'
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v2
