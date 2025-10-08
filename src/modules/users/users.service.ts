@@ -6,6 +6,7 @@ import {
 import * as bcrypt from 'bcryptjs';
 import { config } from '../../config/app.config';
 import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaClient } from '@prisma/client';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserResponseDto } from './dto/response.dto';
@@ -14,7 +15,7 @@ import { UserResponseDto } from './dto/response.dto';
 export class UsersService {
   private readonly saltRounds = config.bcrypt.saltRounds;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService & PrismaClient) {}
 
   async create(createUserDto: CreateUserDto): Promise<UserResponseDto> {
     // Check if user with email already exists
