@@ -36,6 +36,8 @@ jobs:
         run: pnpm install
       - name: Generate Prisma Client
         run: pnpm prisma generate
+      - name: Run migrations
+        run: pnpm prisma migrate deploy
       - name: Run seed
         run: pnpm prisma db seed
       - name: Run unit tests
@@ -69,6 +71,8 @@ jobs:
         run: pnpm install
       - name: Generate Prisma Client
         run: pnpm prisma generate
+      - name: Run migrations
+        run: pnpm prisma migrate deploy
       - name: Run seed
         run: pnpm prisma db seed
       - name: Run E2E tests
