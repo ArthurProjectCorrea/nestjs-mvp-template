@@ -11,6 +11,8 @@ jobs:
   unit-test:
     name: Unit Tests
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/nestjs_mvp_db?schema=public
     services:
       postgres:
         image: postgres:15
@@ -42,6 +44,8 @@ jobs:
   e2e-test:
     name: E2E Tests
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/nestjs_mvp_db?schema=public
     services:
       postgres:
         image: postgres:15
