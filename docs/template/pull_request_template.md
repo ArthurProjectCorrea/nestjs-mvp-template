@@ -78,5 +78,3 @@
 <!-- Any special deployment considerations or migrations required -->
 
 ---
-
-**Generated with ❤️ by the API Template team**
