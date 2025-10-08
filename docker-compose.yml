@@ -1,18 +1,67 @@
-version: '3.8'
-
 services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: nestjs-mvp-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: nestjs_mvp_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - nestjs-network
+
+  # NestJS Application
   app:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: nestjs-mvp-dev
+    container_name: nestjs-mvp-app
     ports:
       - "4000:4000"
+      - "9229:9229" # Debug port
     volumes:
       - .:/usr/src/app
       - /usr/src/app/node_modules
     environment:
       - NODE_ENV=development
       - PORT=4000
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/nestjs_mvp_db?schema=public
+      - LOG_LEVEL=debug
+    depends_on:
+      - postgres
     restart: unless-stopped
-    command: pnpm run start:dev
+    command: pnpm run start:debug
+    networks:
+      - nestjs-network
+
+  # Prisma Studio
+  prisma-studio:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nestjs-mvp-studio
+    ports:
+      - "5555:5555"
+    volumes:
+      - .:/usr/src/app
+      - /usr/src/app/node_modules
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/nestjs_mvp_db?schema=public
+    depends_on:
+      - postgres
+    restart: unless-stopped
+    command: npx prisma studio --hostname 0.0.0.0 --port 5555
+    networks:
+      - nestjs-network
+
+volumes:
+  postgres_data:
+
+networks:
+  nestjs-network:
+    driver: bridge

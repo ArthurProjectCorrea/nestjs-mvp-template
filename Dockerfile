@@ -11,6 +11,9 @@ RUN npm install -g pnpm && pnpm install
 # Copy the rest of the application code
 COPY . .
 
+# Generate Prisma Client
+RUN npx prisma generate
+
 # Expose the port defined in main.ts
 EXPOSE 4000
 
