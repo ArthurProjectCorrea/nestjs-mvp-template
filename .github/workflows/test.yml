@@ -41,7 +41,7 @@ jobs:
       - name: Run seed
         run: pnpm prisma db seed
       - name: Run unit tests
-        run: pnpm test:unit
+        run: pnpm test
 
   e2e-test:
     name: E2E Tests
