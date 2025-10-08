@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { config } from '../../config/app.config';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaClient } from '@prisma/client';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserResponseDto } from './dto/response.dto';
@@ -14,7 +14,7 @@ import { UserResponseDto } from './dto/response.dto';
 export class UsersService {
   private readonly saltRounds = config.bcrypt.saltRounds;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaClient) {}
 
   async create(createUserDto: CreateUserDto): Promise<UserResponseDto> {
     // Check if user with email already exists
@@ -54,7 +54,7 @@ export class UsersService {
   }
 
   async findAll(): Promise<UserResponseDto[]> {
-    const users = (await this.prisma.user.findMany({
+    const users = await this.prisma.user.findMany({
       where: { isActive: true },
       select: {
         id: true,
@@ -66,13 +66,13 @@ export class UsersService {
         updatedAt: true,
       },
       orderBy: { createdAt: 'desc' },
-    })) as UserResponseDto[];
+    });
 
     return users;
   }
 
   async findOne(id: number): Promise<UserResponseDto> {
-    const user = (await this.prisma.user.findFirst({
+    const user = await this.prisma.user.findFirst({
       where: { id, isActive: true },
       select: {
         id: true,
@@ -83,7 +83,7 @@ export class UsersService {
         createdAt: true,
         updatedAt: true,
       },
-    })) as UserResponseDto | null;
+    });
 
     if (!user) {
       throw new NotFoundException(`User with ID ${id} not found`);
