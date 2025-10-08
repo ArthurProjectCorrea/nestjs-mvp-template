@@ -151,6 +151,22 @@ export class UsersService {
     return user;
   }
 
+  async findByEmail(email: string) {
+    return this.prisma.user.findUnique({ where: { email } });
+  }
+
+  async updateByEmail(
+    email: string,
+    data: Partial<{
+      name: string;
+      email: string;
+      password: string;
+      isActive: boolean;
+    }>,
+  ) {
+    return this.prisma.user.update({ where: { email }, data });
+  }
+
   async remove(id: number): Promise<void> {
     // Check if user exists and is active
     await this.findOne(id);
