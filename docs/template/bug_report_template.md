@@ -208,7 +208,3 @@ HTTP/1.1 500 Internal Server Error
 - **Expected Fix Date**:
 - **Affected Release**:
 - **Hotfix Required**: Yes/No
-
----
-
-**Bug report created with ❤️ for PROJECT-A1-API**

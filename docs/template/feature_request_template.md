@@ -187,5 +187,3 @@ CREATE TABLE feature_table (
 
 -
 - ***
-
-  **Feature request created with ❤️ for PROJECT-A1-API**
