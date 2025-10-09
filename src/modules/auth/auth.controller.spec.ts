@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
-import { LoginDto } from './dto/login.dto';
+import { Request } from 'express';
 
 describe('AuthController', () => {
   let controller: AuthController;
@@ -11,6 +11,12 @@ describe('AuthController', () => {
     revokeToken: jest.fn(),
     revokeAllTokens: jest.fn(),
     refreshTokens: jest.fn(),
+    login: jest.fn().mockResolvedValue({
+      access_token: 'access',
+      refresh_token: 'refresh',
+      user: { id: 1, email: 'a@a.com', name: 'test', role: 'user' },
+    }),
+    logout: jest.fn().mockResolvedValue({ message: 'Logout OK' }),
     requestReset: jest.fn().mockResolvedValue({ token: 'tok' }),
     resetPassword: jest.fn().mockResolvedValue({ message: 'ok' }),
     getProfile: jest.fn().mockResolvedValue({ id: 1, email: 'a@a.com' }),
@@ -29,29 +35,43 @@ describe('AuthController', () => {
     expect(controller).toBeDefined();
   });
 
-  it('login should call service.validateUser and generateTokens', async () => {
-    const user = { id: 1, email: 'a', name: 'test', role: 'user' };
-    const tokens = { accessToken: 'access', refreshToken: 'refresh' };
+  describe('login', () => {
+    it('should login user successfully', async () => {
+      const loginDto = { email: 'test@example.com', password: 'password' };
+      const mockRequest = {
+        ip: '127.0.0.1',
+        connection: { remoteAddress: '127.0.0.1' },
+        get: jest.fn().mockReturnValue('Mozilla/5.0'),
+      } as unknown as Request;
 
-    mockService.validateUser.mockResolvedValue(user);
-    mockService.generateTokens.mockResolvedValue(tokens);
+      const result = await controller.login(loginDto, mockRequest);
 
-    const dto = new LoginDto();
-    dto.email = 'a';
-    dto.password = 'b';
-    const res = await controller.login(dto);
-
-    expect(mockService.validateUser).toHaveBeenCalledWith('a', 'b');
-    expect(mockService.generateTokens).toHaveBeenCalledWith(1);
-    expect(res).toHaveProperty('accessToken', 'access');
-    expect(res).toHaveProperty('refreshToken', 'refresh');
-    expect(res).toHaveProperty('user', user);
+      expect(mockService.login).toHaveBeenCalledWith(loginDto, {
+        ip: '127.0.0.1',
+        userAgent: 'Mozilla/5.0',
+        deviceName: 'Mozilla/5.0',
+      });
+      expect(result).toEqual({
+        access_token: 'access',
+        refresh_token: 'refresh',
+        user: { id: 1, email: 'a@a.com', name: 'test', role: 'user' },
+      });
+    });
   });
 
-  it('logout should call service.revokeToken', async () => {
+  it('logout should call service.logout with correct parameters', async () => {
     const dto = { refreshToken: 'token' };
-    const res = await controller.logout(dto);
-    expect(mockService.revokeToken).toHaveBeenCalledWith('token');
-    expect(res).toHaveProperty('message', 'Logout successful');
+    const mockReq = {
+      ip: '127.0.0.1',
+      get: jest.fn().mockReturnValue('TestAgent/1.0'),
+    } as unknown as Request;
+
+    const res = await controller.logout(dto, mockReq);
+
+    expect(mockService.logout).toHaveBeenCalledWith('token', {
+      ip: '127.0.0.1',
+      userAgent: 'TestAgent/1.0',
+    });
+    expect(res).toHaveProperty('message', 'Logout OK');
   });
 });

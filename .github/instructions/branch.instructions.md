@@ -170,6 +170,138 @@ chore/<maintenance-description>
 - CI/CD improvements
 - Code refactoring
 
+## 🤖 Branch Name Suggestion System
+
+### Overview
+
+The project includes an automated system for suggesting appropriate branch names based on issue analysis. This system helps maintain consistency and ensures branch names accurately reflect the work being done.
+
+### How It Works
+
+1. **Issue Analysis**: The system reads and analyzes issue files from `docs/issue/`
+2. **Type Detection**: Automatically determines if it's a feature request or bug report
+3. **Scope Assessment**: Evaluates the technical scope and affected components
+4. **Name Generation**: Suggests multiple branch name options with justifications
+
+### Usage
+
+#### For Feature Requests
+
+When implementing a feature request (e.g., `docs/issue/01.create-user-crud-feature-request.md`):
+
+```bash
+# The system suggests names like:
+✅ feature/user-crud-operations
+✅ feature/user-management-api
+✅ feature/create-user-endpoints
+```
+
+#### For Bug Reports
+
+When fixing a bug report (e.g., `docs/issue/02.fix-login-validation-bug-report.md`):
+
+```bash
+# The system suggests names like:
+✅ bugfix/login-validation-error
+✅ bugfix/auth-validation-fix
+✅ bugfix/user-login-issue
+```
+
+### Suggestion Criteria
+
+#### Primary Recommendation
+
+- **Most appropriate** name based on issue analysis
+- **Follows conventions** exactly
+- **Clear and descriptive** for all team members
+- **Includes key technical terms** from the issue
+
+#### Alternative Options
+
+- **2-3 additional suggestions** with different focuses
+- **Variations for different scopes** (specific vs general)
+- **Component-specific names** when applicable
+- **Different specificity levels** for complex issues
+
+### Integration with Issues
+
+#### Issue-to-Branch Mapping
+
+| Issue Type      | Branch Prefix | Example                         |
+| --------------- | ------------- | ------------------------------- |
+| Feature Request | `feature/`    | `feature/user-authentication`   |
+| Bug Report      | `bugfix/`     | `bugfix/login-validation-error` |
+| Critical Bug    | `hotfix/`     | `hotfix/security-vulnerability` |
+| Documentation   | `docs/`       | `docs/api-documentation-update` |
+| Maintenance     | `chore/`      | `chore/update-dependencies`     |
+
+#### Technical Considerations
+
+- **API Endpoints**: Include main resource or endpoint name
+- **Database Changes**: Reference affected models/tables
+- **Authentication**: Use security/auth terminology
+- **UI Components**: Include component or feature names
+- **Integrations**: Reference external services
+
+### Quality Standards
+
+#### Naming Requirements
+
+- ✅ **Lowercase only**: `feature/user-auth` ✅
+- ✅ **Hyphens for separation**: `feature/password-reset` ✅
+- ✅ **Descriptive and specific**: `bugfix/memory-leak-fix` ✅
+- ✅ **Technical accuracy**: Use correct component names
+- ✅ **Reasonable length**: Maximum 50 characters
+
+#### Rejected Patterns
+
+- ❌ **Too vague**: `feature/fix` or `feature/update`
+- ❌ **Uppercase**: `Feature/UserAuth`
+- ❌ **Spaces**: `feature/user auth`
+- ❌ **Special characters**: `feature/user@auth`
+- ❌ **Too long**: Names exceeding readability limits
+
+### Practical Examples
+
+#### Example 1: User Authentication Feature
+
+**Issue:** `docs/issue/08.refresh-token-blacklist-implementation.md`
+
+**Suggested Branches:**
+
+- 🎯 **Primary:** `feature/refresh-token-blacklist`
+- 🔄 **Alternatives:**
+  - `feature/jwt-token-security`
+  - `feature/auth-session-management`
+  - `feature/token-blacklist-system`
+
+#### Example 2: Login Bug Fix
+
+**Issue:** `docs/issue/02.fix-login-validation-bug-report.md`
+
+**Suggested Branches:**
+
+- 🎯 **Primary:** `bugfix/login-validation-error`
+- 🔄 **Alternatives:**
+  - `bugfix/auth-validation-fix`
+  - `bugfix/user-login-issue`
+  - `bugfix/credential-validation`
+
+### Validation and Enforcement
+
+#### Automatic Checks
+
+- **Pattern compliance**: Branch names validated against conventions
+- **Issue linkage**: Suggestions based on actual issue content
+- **Technical accuracy**: Names reflect actual implementation scope
+- **Consistency**: Follows project-wide naming patterns
+
+#### Manual Review
+
+- **Clarity assessment**: Names should be understandable to all team members
+- **Scope accuracy**: Branch names should match actual work scope
+- **Future-proofing**: Names should work well in commit messages and PRs
+
 ## 🔄 Complete Workflow
 
 ### 1. Environment Preparation

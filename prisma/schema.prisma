@@ -15,23 +15,40 @@ datasource db {
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  name      String
-  email     String   @unique
-  password  String
-  role      String   @default("user")
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  tokens    Token[]
+  id          Int       @id @default(autoincrement())
+  name        String
+  email       String    @unique
+  password    String
+  role        String    @default("user")
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  tokens      Token[]
+  auditLogs   AuditLog[]
 }
 
 model Token {
-  id           Int      @id @default(autoincrement())
-  userId       Int
-  refreshToken String   @unique
-  isRevoked    Boolean  @default(false)
-  createdAt    DateTime @default(now())
-  expiresAt    DateTime
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id               Int       @id @default(autoincrement())
+  userId           Int
+  refreshTokenHash String    @unique
+  jti              String    @unique // JWT ID for access token
+  ip               String?
+  userAgent        String?
+  deviceName       String?   // optional (e.g., "Chrome on MacBook")
+  location         String?   // optional (city/country if resolved)
+  isRevoked        Boolean   @default(false)
+  createdAt        DateTime  @default(now())
+  expiresAt        DateTime
+  lastUsedAt       DateTime? // last time refresh was used
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int?
+  event     String   // 'LOGIN', 'LOGIN_FAIL', 'REFRESH', 'LOGOUT', 'REVOKE', ...
+  ip        String?
+  meta      Json?    // extra info (userAgent, reason, token jti, etc.)
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 }

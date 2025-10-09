@@ -15,6 +15,16 @@ services:
     networks:
       - nestjs-network
 
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: nestjs-mvp-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    networks:
+      - nestjs-network
+
   # NestJS Application
   app:
     build:
@@ -31,6 +41,8 @@ services:
       - NODE_ENV=development
       - PORT=4000
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/nestjs_mvp_db?schema=public
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
       - LOG_LEVEL=debug
     depends_on:
       - postgres
