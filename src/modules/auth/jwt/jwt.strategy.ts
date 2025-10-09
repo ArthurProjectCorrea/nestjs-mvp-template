@@ -6,6 +6,7 @@ interface JwtPayload {
   sub: number;
   email: string;
   role?: string;
+  jti?: string;
 }
 
 @Injectable()
@@ -18,6 +19,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   validate(payload: JwtPayload) {
-    return { userId: payload.sub, email: payload.email, role: payload.role };
+    return {
+      sub: payload.sub,
+      email: payload.email,
+      role: payload.role,
+      jti: payload.jti,
+    };
   }
 }

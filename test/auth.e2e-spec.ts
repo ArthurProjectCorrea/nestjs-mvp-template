@@ -1,6 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
-
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 
 import { Test, TestingModule } from '@nestjs/testing';
@@ -58,8 +57,8 @@ describe('Auth (e2e)', () => {
       .send({ email, password })
       .expect(201);
 
-    expect(loginRes.body).toHaveProperty('accessToken');
-    const token = loginRes.body.accessToken;
+    expect(loginRes.body).toHaveProperty('access_token');
+    const token = loginRes.body.access_token;
 
     // 3. Access protected profile
     const profileRes = await request(app.getHttpServer())
@@ -100,13 +99,13 @@ describe('Auth (e2e)', () => {
     // 8. Test refresh token functionality
     const refreshRes = await request(app.getHttpServer())
       .post('/auth/refresh')
-      .send({ refreshToken: loginRes2.body.refreshToken })
+      .send({ refreshToken: loginRes2.body.refresh_token })
       .expect(200);
 
-    expect(refreshRes.body).toHaveProperty('accessToken');
-    expect(refreshRes.body).toHaveProperty('refreshToken');
-    const newAccessToken = refreshRes.body.accessToken;
-    const newRefreshToken = refreshRes.body.refreshToken;
+    expect(refreshRes.body).toHaveProperty('access_token');
+    expect(refreshRes.body).toHaveProperty('refresh_token');
+    const newAccessToken = refreshRes.body.access_token;
+    const newRefreshToken = refreshRes.body.refresh_token;
 
     // 9. Verify new access token works
     await request(app.getHttpServer())
@@ -118,6 +117,7 @@ describe('Auth (e2e)', () => {
     await request(app.getHttpServer())
       .post('/auth/logout-all')
       .set('Authorization', `Bearer ${newAccessToken}`)
+      .send({ refreshToken: newRefreshToken })
       .expect(200);
 
     // 11. Verify old refresh token is revoked (should fail)
@@ -126,11 +126,11 @@ describe('Auth (e2e)', () => {
       .send({ refreshToken: newRefreshToken })
       .expect(401);
 
-    // 12. Verify access token still works (logout-all only revokes refresh tokens)
+    // 12. Verify access token is also revoked (logout-all revokes all tokens)
     await request(app.getHttpServer())
       .get('/auth/profile')
       .set('Authorization', `Bearer ${newAccessToken}`)
-      .expect(200);
+      .expect(401);
 
     // 13. Test individual logout with refresh token
     const loginRes3 = await request(app.getHttpServer())
@@ -138,7 +138,7 @@ describe('Auth (e2e)', () => {
       .send({ email, password: newPassword })
       .expect(201);
 
-    const finalRefreshToken = loginRes3.body.refreshToken;
+    const finalRefreshToken = loginRes3.body.refresh_token;
 
     // Logout with specific refresh token
     await request(app.getHttpServer())
