@@ -1,16 +1,47 @@
 import { ApiProperty } from '@nestjs/swagger';
 
+export class UserDto {
+  @ApiProperty({
+    description: 'User ID',
+    example: 1,
+  })
+  id: number;
+
+  @ApiProperty({
+    description: 'User name',
+    example: 'John Doe',
+  })
+  name: string;
+
+  @ApiProperty({
+    description: 'User email',
+    example: 'john.doe@example.com',
+  })
+  email: string;
+
+  @ApiProperty({
+    description: 'User role',
+    example: 'user',
+  })
+  role: string;
+}
+
 export class AuthResponseDto {
   @ApiProperty({
     description: 'JWT access token',
     example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
   })
-  access_token: string;
+  accessToken: string;
 
   @ApiProperty({
-    description: 'Token expiry in seconds or string',
-    example: '1d',
-    required: false,
+    description: 'JWT refresh token',
+    example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
   })
-  expiresIn?: string | number;
+  refreshToken: string;
+
+  @ApiProperty({
+    description: 'User information',
+    type: UserDto,
+  })
+  user: UserDto;
 }

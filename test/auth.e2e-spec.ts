@@ -58,8 +58,8 @@ describe('Auth (e2e)', () => {
       .send({ email, password })
       .expect(201);
 
-    expect(loginRes.body).toHaveProperty('access_token');
-    const token = loginRes.body.access_token;
+    expect(loginRes.body).toHaveProperty('accessToken');
+    const token = loginRes.body.accessToken;
 
     // 3. Access protected profile
     const profileRes = await request(app.getHttpServer())
@@ -83,7 +83,7 @@ describe('Auth (e2e)', () => {
     await request(app.getHttpServer())
       .post('/auth/reset-password')
       .send({ token: resetToken, newPassword })
-      .expect(201);
+      .expect(200);
 
     // 6. Try login with old password -> should fail
     await request(app.getHttpServer())
@@ -97,17 +97,60 @@ describe('Auth (e2e)', () => {
       .send({ email, password: newPassword })
       .expect(201);
 
-    const token2 = loginRes2.body.access_token;
+    // 8. Test refresh token functionality
+    const refreshRes = await request(app.getHttpServer())
+      .post('/auth/refresh')
+      .send({ refreshToken: loginRes2.body.refreshToken })
+      .expect(200);
 
-    // 8. Logout (MVP behaviour)
+    expect(refreshRes.body).toHaveProperty('accessToken');
+    expect(refreshRes.body).toHaveProperty('refreshToken');
+    const newAccessToken = refreshRes.body.accessToken;
+    const newRefreshToken = refreshRes.body.refreshToken;
+
+    // 9. Verify new access token works
+    await request(app.getHttpServer())
+      .get('/auth/profile')
+      .set('Authorization', `Bearer ${newAccessToken}`)
+      .expect(200);
+
+    // 10. Test logout-all (revoke all tokens for user)
+    await request(app.getHttpServer())
+      .post('/auth/logout-all')
+      .set('Authorization', `Bearer ${newAccessToken}`)
+      .expect(200);
+
+    // 11. Verify old refresh token is revoked (should fail)
+    await request(app.getHttpServer())
+      .post('/auth/refresh')
+      .send({ refreshToken: newRefreshToken })
+      .expect(401);
+
+    // 12. Verify access token still works (logout-all only revokes refresh tokens)
+    await request(app.getHttpServer())
+      .get('/auth/profile')
+      .set('Authorization', `Bearer ${newAccessToken}`)
+      .expect(200);
+
+    // 13. Test individual logout with refresh token
+    const loginRes3 = await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ email, password: newPassword })
+      .expect(201);
+
+    const finalRefreshToken = loginRes3.body.refreshToken;
+
+    // Logout with specific refresh token
     await request(app.getHttpServer())
       .post('/auth/logout')
-      .set('Authorization', `Bearer ${token2}`)
-      .expect((res) => {
-        if (![200, 201].includes(res.status)) {
-          throw new Error(`Unexpected status code: ${res.status}`);
-        }
-      });
+      .send({ refreshToken: finalRefreshToken })
+      .expect(200);
+
+    // Try to refresh with revoked token (should fail)
+    await request(app.getHttpServer())
+      .post('/auth/refresh')
+      .send({ refreshToken: finalRefreshToken })
+      .expect(401);
 
     // Cleanup: remove user directly from DB (optional)
     await prisma.user.delete({ where: { id: userId } });
