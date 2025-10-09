@@ -13,6 +13,10 @@ jobs:
     runs-on: ubuntu-latest
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/nestjs_mvp_db?schema=public
+      REDIS_HOST: localhost
+      REDIS_PORT: 6379
+      REFRESH_EXPIRES_IN_DAYS: 30
+      MAX_SESSIONS_PER_USER: 5
     services:
       postgres:
         image: postgres:15
@@ -23,6 +27,11 @@ jobs:
         ports:
           - 5432:5432
         options: '--health-cmd="pg_isready -U postgres" --health-interval=10s --health-timeout=5s --health-retries=5'
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: '--health-cmd="redis-cli ping" --health-interval=10s --health-timeout=5s --health-retries=5'
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v2
@@ -48,6 +57,10 @@ jobs:
     runs-on: ubuntu-latest
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/nestjs_mvp_db?schema=public
+      REDIS_HOST: localhost
+      REDIS_PORT: 6379
+      REFRESH_EXPIRES_IN_DAYS: 30
+      MAX_SESSIONS_PER_USER: 5
     services:
       postgres:
         image: postgres:15
@@ -58,6 +71,11 @@ jobs:
         ports:
           - 5432:5432
         options: '--health-cmd="pg_isready -U postgres" --health-interval=10s --health-timeout=5s --health-retries=5'
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: '--health-cmd="redis-cli ping" --health-interval=10s --health-timeout=5s --health-retries=5'
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v2
