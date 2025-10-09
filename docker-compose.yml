@@ -48,14 +48,15 @@ services:
     ports:
       - "5555:5555"
     volumes:
-      - .:/usr/src/app
-      - /usr/src/app/node_modules
+      - ./prisma:/usr/src/app/prisma
+      - ./src:/usr/src/app/src
+      - ./.env:/usr/src/app/.env
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/nestjs_mvp_db?schema=public
     depends_on:
       - postgres
     restart: unless-stopped
-    command: npx prisma studio --hostname 0.0.0.0 --port 5555
+    command: sh -c "npx prisma generate && npx prisma studio --hostname 0.0.0.0 --port 5555"
     networks:
       - nestjs-network
 
