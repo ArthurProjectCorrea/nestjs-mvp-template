@@ -2,9 +2,9 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AuthService } from './auth.service';
 import { UsersService } from '../users/users.service';
 import { JwtService } from '@nestjs/jwt';
+import { PrismaService } from '../../prisma/prisma.service';
 import * as bcrypt from 'bcryptjs';
 import { UnauthorizedException, BadRequestException } from '@nestjs/common';
-import { LoginDto } from './dto/login.dto';
 import { RequestResetDto } from './dto/request-reset.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 
@@ -16,6 +16,14 @@ describe('AuthService', () => {
     findOne: jest.Mock;
   };
   let jwtMock: { sign: jest.Mock };
+  let prismaMock: {
+    token: {
+      create: jest.Mock;
+      findUnique: jest.Mock;
+      update: jest.Mock;
+      updateMany: jest.Mock;
+    };
+  };
 
   beforeEach(async () => {
     usersMock = {
@@ -28,11 +36,21 @@ describe('AuthService', () => {
       sign: jest.fn().mockReturnValue('signed-token'),
     };
 
+    prismaMock = {
+      token: {
+        create: jest.fn(),
+        findUnique: jest.fn(),
+        update: jest.fn(),
+        updateMany: jest.fn(),
+      },
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
         { provide: UsersService, useValue: usersMock },
         { provide: JwtService, useValue: jwtMock },
+        { provide: PrismaService, useValue: prismaMock },
       ],
     }).compile();
 
@@ -43,8 +61,8 @@ describe('AuthService', () => {
     expect(service).toBeDefined();
   });
 
-  describe('login', () => {
-    it('returns token and user when credentials are valid', async () => {
+  describe('validateUser', () => {
+    it('returns user when credentials are valid', async () => {
       const password = 'secret';
       const hashed = await bcrypt.hash(password, 10);
       const user = {
@@ -61,27 +79,20 @@ describe('AuthService', () => {
         password: hashed,
       });
 
-      const dto = new LoginDto();
-      dto.email = user.email;
-      dto.password = password;
+      const result = await service.validateUser(user.email, password);
 
-      const result = await service.login(dto);
-
-      expect(result).toHaveProperty('access_token', 'signed-token');
-      expect(result).toHaveProperty('user');
-      expect(jwtMock.sign.mock.calls.length).toBeGreaterThan(0);
+      expect(result).toHaveProperty('id', 1);
+      expect(result).toHaveProperty('email', user.email);
+      expect(result).toHaveProperty('name', user.name);
+      expect(result).toHaveProperty('role', user.role);
     });
 
     it('throws on invalid credentials', async () => {
       usersMock.findByEmail.mockResolvedValue(null);
 
-      const dto = new LoginDto();
-      dto.email = 'no@no.com';
-      dto.password = 'x';
-
-      await expect(service.login(dto)).rejects.toBeInstanceOf(
-        UnauthorizedException,
-      );
+      await expect(
+        service.validateUser('no@no.com', 'x'),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
     });
   });
 
@@ -163,6 +174,110 @@ describe('AuthService', () => {
     it('logout returns message', () => {
       const res = service.logout();
       expect(res).toHaveProperty('message');
+    });
+  });
+
+  describe('generateTokens', () => {
+    it('generates access and refresh tokens', async () => {
+      const userId = 1;
+      const user = {
+        id: 1,
+        name: 'Test User',
+        email: 'test@example.com',
+        role: 'user',
+      };
+      usersMock.findOne.mockResolvedValue(user);
+      prismaMock.token.create.mockResolvedValue({} as any);
+
+      const result = await service.generateTokens(userId);
+
+      expect(result).toHaveProperty('accessToken');
+      expect(result).toHaveProperty('refreshToken');
+      expect(typeof result.accessToken).toBe('string');
+      expect(typeof result.refreshToken).toBe('string');
+    });
+  });
+
+  describe('validateRefreshToken', () => {
+    it('validates valid refresh token', async () => {
+      const user = {
+        id: 1,
+        name: 'Test User',
+        email: 'test@example.com',
+        role: 'user',
+      };
+      const token = {
+        id: 1,
+        userId: 1,
+        refreshToken: 'valid-token',
+        isRevoked: false,
+        expiresAt: new Date(Date.now() + 100000),
+        user,
+      };
+      prismaMock.token.findUnique.mockResolvedValue(token);
+
+      const result = await service.validateRefreshToken('valid-token');
+      expect(result).toEqual(user);
+    });
+
+    it('throws on invalid refresh token', async () => {
+      prismaMock.token.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.validateRefreshToken('invalid-token'),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+  });
+
+  describe('revokeToken', () => {
+    it('revokes refresh token', async () => {
+      prismaMock.token.updateMany.mockResolvedValue({} as any);
+
+      await expect(service.revokeToken('token')).resolves.toBeUndefined();
+      expect(prismaMock.token.updateMany).toHaveBeenCalledWith({
+        where: { refreshToken: 'token' },
+        data: { isRevoked: true },
+      });
+    });
+  });
+
+  describe('revokeAllTokens', () => {
+    it('revokes all tokens for user', async () => {
+      prismaMock.token.updateMany.mockResolvedValue({ count: 2 });
+
+      await expect(service.revokeAllTokens(1)).resolves.toBeUndefined();
+      expect(prismaMock.token.updateMany).toHaveBeenCalledWith({
+        where: { userId: 1, isRevoked: false },
+        data: { isRevoked: true },
+      });
+    });
+  });
+
+  describe('refreshTokens', () => {
+    it('refreshes tokens successfully', async () => {
+      const user = {
+        id: 1,
+        name: 'Test User',
+        email: 'test@example.com',
+        role: 'user',
+      };
+      const token = {
+        id: 1,
+        userId: 1,
+        refreshToken: 'old-token',
+        isRevoked: false,
+        expiresAt: new Date(Date.now() + 100000),
+        user,
+      };
+      prismaMock.token.findUnique.mockResolvedValue(token);
+      prismaMock.token.updateMany.mockResolvedValue({} as any);
+      usersMock.findOne.mockResolvedValue(user);
+      prismaMock.token.create.mockResolvedValue({} as any);
+
+      const result = await service.refreshTokens('old-token');
+
+      expect(result).toHaveProperty('accessToken');
+      expect(result).toHaveProperty('refreshToken');
     });
   });
 });

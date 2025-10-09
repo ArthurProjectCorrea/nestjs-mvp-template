@@ -7,6 +7,7 @@ import {
   Req,
   HttpCode,
   HttpStatus,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { AuthService } from './auth.service';
@@ -23,6 +24,7 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { AuthResponseDto } from './dto/auth-response.dto';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -37,16 +39,29 @@ export class AuthController {
   })
   @ApiBadRequestResponse({ description: 'Invalid payload' })
   @ApiUnauthorizedResponse({ description: 'Invalid credentials' })
-  login(@Body() dto: LoginDto) {
-    return this.authService.login(dto);
+  async login(@Body() dto: LoginDto) {
+    const user = await this.authService.validateUser(dto.email, dto.password);
+    const tokens = await this.authService.generateTokens(user.id);
+
+    return {
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
+    };
   }
 
   @Post('logout')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Logout (MVP behavior)' })
+  @ApiOperation({ summary: 'Logout and revoke refresh token' })
   @ApiOkResponse({ description: 'Logout successful' })
-  logout() {
-    return this.authService.logout();
+  async logout(@Body() dto: RefreshTokenDto) {
+    await this.authService.revokeToken(dto.refreshToken);
+    return { message: 'Logout successful' };
   }
 
   @Post('request-reset')
@@ -58,6 +73,7 @@ export class AuthController {
   }
 
   @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Reset password using token' })
   @ApiOkResponse({ description: 'Password reset successfully' })
   @ApiBadRequestResponse({ description: 'Invalid token or payload' })
@@ -72,5 +88,29 @@ export class AuthController {
   @ApiUnauthorizedResponse({ description: 'Missing or invalid token' })
   getProfile(@Req() req: Request & { user: { userId: number } }) {
     return this.authService.getProfile(req.user.userId);
+  }
+
+  @Post('refresh')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Refresh access token using refresh token' })
+  @ApiOkResponse({ description: 'Tokens refreshed successfully' })
+  @ApiUnauthorizedResponse({ description: 'Invalid or expired refresh token' })
+  async refresh(@Body() dto: RefreshTokenDto) {
+    try {
+      const tokens = await this.authService.refreshTokens(dto.refreshToken);
+      return tokens;
+    } catch {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+  }
+
+  @UseGuards(JwtGuard)
+  @Post('logout-all')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Logout from all sessions' })
+  @ApiOkResponse({ description: 'All sessions revoked successfully' })
+  async logoutAll(@Req() req: Request & { user: { userId: number } }) {
+    await this.authService.revokeAllTokens(req.user.userId);
+    return { message: 'All sessions revoked successfully' };
   }
 }

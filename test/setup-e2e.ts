@@ -5,6 +5,10 @@ import 'reflect-metadata';
 process.env.NODE_ENV = 'test';
 process.env.LOG_LEVEL = 'error'; // Reduce noise in test output
 
+// Override DATABASE_URL for E2E tests to use localhost instead of Docker service name
+process.env.DATABASE_URL =
+  'postgresql://postgres:postgres@localhost:5432/nestjs_mvp_db?schema=public';
+
 // Global test timeout for E2E tests (they take longer)
 jest.setTimeout(60000);
 
