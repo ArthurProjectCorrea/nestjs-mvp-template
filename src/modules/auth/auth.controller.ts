@@ -15,7 +15,9 @@ import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RequestResetDto } from './dto/request-reset.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { Enable2faDto, Verify2faDto, Disable2faDto } from './dto/2fa.dto';
 import { JwtGuard } from './jwt/jwt.guard';
+import { ThrottlerGuard } from '@nestjs/throttler';
 import {
   ApiTags,
   ApiOperation,
@@ -36,6 +38,7 @@ import { hashToken } from '../../utils/token-hash';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  @UseGuards(ThrottlerGuard)
   @Post('login')
   @ApiOperation({
     summary: 'Login with email and password',
@@ -60,7 +63,7 @@ export class AuthController {
       userAgent: req.get('User-Agent'),
       deviceName: req.get('User-Agent')?.split(' ')[0] || 'Unknown',
     };
-    return this.authService.login(dto, meta);
+    return this.authService.loginWithSecurity(dto, meta);
   }
 
   @Post('logout')
@@ -333,5 +336,93 @@ export class AuthController {
   })
   getProfile(@Req() req: Request & { user: { sub: number } }) {
     return this.authService.getProfile(req.user.sub);
+  }
+
+  // 2FA endpoints
+  @UseGuards(JwtGuard)
+  @Post('2fa/setup')
+  @ApiOperation({
+    summary: 'Setup 2FA for user',
+    description: 'Generates TOTP secret and QR code for 2FA setup',
+  })
+  @ApiOkResponse({
+    description: '2FA setup data generated',
+    schema: {
+      type: 'object',
+      properties: {
+        otpauth_url: { type: 'string' },
+        qr: { type: 'string' },
+        base32: { type: 'string' },
+      },
+    },
+  })
+  setup2fa(@Req() req: Request & { user: { sub: number } }) {
+    return this.authService.setup2fa(req.user.sub);
+  }
+
+  @UseGuards(JwtGuard)
+  @Post('2fa/enable')
+  @ApiOperation({
+    summary: 'Enable 2FA for user',
+    description: 'Verifies TOTP token and enables 2FA for the user',
+  })
+  @ApiOkResponse({
+    description: '2FA enabled successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string', example: '2FA enabled' },
+      },
+    },
+  })
+  enable2fa(
+    @Body() dto: Enable2faDto,
+    @Req() req: Request & { user: { sub: number } },
+  ) {
+    return this.authService.enable2fa(req.user.sub, dto.token);
+  }
+
+  @UseGuards(JwtGuard)
+  @Post('2fa/verify')
+  @ApiOperation({
+    summary: 'Verify 2FA token',
+    description: 'Verifies a TOTP token for 2FA authentication',
+  })
+  @ApiOkResponse({
+    description: 'Token verified successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        verified: { type: 'boolean', example: true },
+      },
+    },
+  })
+  verify2fa(
+    @Body() dto: Verify2faDto,
+    @Req() req: Request & { user: { sub: number } },
+  ) {
+    return this.authService.verify2fa(req.user.sub, dto.token);
+  }
+
+  @UseGuards(JwtGuard)
+  @Post('2fa/disable')
+  @ApiOperation({
+    summary: 'Disable 2FA for user',
+    description: 'Verifies TOTP token and disables 2FA for the user',
+  })
+  @ApiOkResponse({
+    description: '2FA disabled successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string', example: '2FA disabled' },
+      },
+    },
+  })
+  disable2fa(
+    @Body() dto: Disable2faDto,
+    @Req() req: Request & { user: { sub: number } },
+  ) {
+    return this.authService.disable2fa(req.user.sub, dto.token);
   }
 }
