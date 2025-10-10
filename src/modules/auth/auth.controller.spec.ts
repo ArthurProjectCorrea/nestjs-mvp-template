@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { Request } from 'express';
@@ -16,6 +17,11 @@ describe('AuthController', () => {
       refresh_token: 'refresh',
       user: { id: 1, email: 'a@a.com', name: 'test', role: 'user' },
     }),
+    loginWithSecurity: jest.fn().mockResolvedValue({
+      access_token: 'access',
+      refresh_token: 'refresh',
+      user: { id: 1, email: 'a@a.com', name: 'test', role: 'user' },
+    }),
     logout: jest.fn().mockResolvedValue({ message: 'Logout OK' }),
     requestReset: jest.fn().mockResolvedValue({ token: 'tok' }),
     resetPassword: jest.fn().mockResolvedValue({ message: 'ok' }),
@@ -24,6 +30,7 @@ describe('AuthController', () => {
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
+      imports: [ThrottlerModule.forRoot()],
       controllers: [AuthController],
       providers: [{ provide: AuthService, useValue: mockService }],
     }).compile();
@@ -46,7 +53,7 @@ describe('AuthController', () => {
 
       const result = await controller.login(loginDto, mockRequest);
 
-      expect(mockService.login).toHaveBeenCalledWith(loginDto, {
+      expect(mockService.loginWithSecurity).toHaveBeenCalledWith(loginDto, {
         ip: '127.0.0.1',
         userAgent: 'Mozilla/5.0',
         deviceName: 'Mozilla/5.0',

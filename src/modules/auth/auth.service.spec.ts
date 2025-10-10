@@ -48,8 +48,15 @@ describe('AuthService', () => {
       auditLog: {
         create: jest.fn(),
       },
+      passwordHistory: {
+        findMany: jest.fn().mockResolvedValue([]),
+        create: jest.fn(),
+        count: jest.fn().mockResolvedValue(0),
+        deleteMany: jest.fn(),
+      },
       user: {
         findUnique: jest.fn(),
+        update: jest.fn(),
       },
     };
 
@@ -449,18 +456,21 @@ describe('AuthService', () => {
       usersMock.updateByEmail.mockResolvedValue(true);
       const dto = new ResetPasswordDto();
       dto.token = token;
-      dto.newPassword = 'newpass';
+      dto.newPassword = 'NewPassword123!';
 
       const res = await service.resetPassword(dto);
 
       expect(res).toHaveProperty('message');
-      expect(usersMock.updateByEmail).toHaveBeenCalledWith(
-        user.email,
-        expect.objectContaining({ password: expect.any(String) } as Record<
-          string,
-          unknown
-        >),
-      );
+      expect(prismaMock.user.update).toHaveBeenCalledWith({
+        where: { id: user.id },
+        data: {
+          password: expect.any(String),
+          passwordChangedAt: expect.any(Date),
+        },
+      });
+      expect(prismaMock.passwordHistory.create).toHaveBeenCalledWith({
+        data: { userId: user.id, hash: expect.any(String) },
+      });
     });
 
     it('throws when token invalid', async () => {

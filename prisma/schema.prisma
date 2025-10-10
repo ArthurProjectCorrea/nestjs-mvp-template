@@ -15,16 +15,26 @@ datasource db {
 }
 
 model User {
-  id          Int       @id @default(autoincrement())
-  name        String
-  email       String    @unique
-  password    String
-  role        String    @default("user")
-  isActive    Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  tokens      Token[]
-  auditLogs   AuditLog[]
+  id              Int              @id @default(autoincrement())
+  name            String
+  email           String           @unique
+  password        String
+  role            String           @default("user")
+  isActive        Boolean          @default(true)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  // 2FA
+  is2faEnabled    Boolean          @default(false)
+  totpSecret      String?          // encrypted storage
+
+  // Password policy
+  passwordChangedAt DateTime?
+
+  tokens          Token[]
+  auditLogs       AuditLog[]
+  passwordHistory PasswordHistory[]
+  loginAttempts   LoginAttempt[]
 }
 
 model Token {
@@ -49,6 +59,26 @@ model AuditLog {
   event     String   // 'LOGIN', 'LOGIN_FAIL', 'REFRESH', 'LOGOUT', 'REVOKE', ...
   ip        String?
   meta      Json?    // extra info (userAgent, reason, token jti, etc.)
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+}
+
+model PasswordHistory {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  hash      String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model LoginAttempt {
+  id        Int      @id @default(autoincrement())
+  userId    Int?
+  email     String?
+  ip        String?
+  userAgent String?
+  success   Boolean
+  reason    String?
   createdAt DateTime @default(now())
   user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 }

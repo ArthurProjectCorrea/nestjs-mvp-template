@@ -2,6 +2,7 @@ import {
   Injectable,
   ForbiddenException,
   UnauthorizedException,
+  BadRequestException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
@@ -11,6 +12,11 @@ import { LoginDto } from './dto/login.dto';
 import { RequestResetDto } from './dto/request-reset.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { hashToken } from '../../utils/token-hash';
+import { encrypt, decrypt } from '../../utils/crypto';
+import { getRegionFromIp } from '../../utils/geoip';
+import { validatePassword } from '../../utils/password-policy';
+import * as speakeasy from 'speakeasy';
+import * as qrcode from 'qrcode';
 import { randomBytes } from 'crypto';
 import { addSeconds } from 'date-fns';
 import { RedisService } from '../../common/redis/redis.service';
@@ -341,6 +347,285 @@ export class AuthService {
     return !!val;
   }
 
+  // Rate limiting and security methods
+  async recordLoginAttempt({
+    email,
+    ip,
+    userAgent,
+    success,
+    userId,
+    reason,
+  }: {
+    email?: string;
+    ip?: string;
+    userAgent?: string;
+    success: boolean;
+    userId?: number;
+    reason?: string;
+  }) {
+    await this.prisma.loginAttempt.create({
+      data: { email, ip, userAgent, success, userId, reason },
+    });
+    if (!success && email) {
+      const key = `login:fail:${email}`;
+      const fails = await this.redisClient.incr(key);
+      if (fails === 1) {
+        await this.redisClient.expire(
+          key,
+          Number(process.env.RATE_LIMIT_TTL || 900),
+        );
+      }
+      const max = Number(process.env.RATE_LIMIT_MAX || 10);
+      if (fails >= max) {
+        await this.redisClient.setex(`blocked:email:${email}`, 60 * 15, '1'); // block 15min
+        // audit
+        await this.prisma.auditLog.create({
+          data: { event: 'BRUTE_FORCE_BLOCK', ip },
+        });
+      }
+    } else if (success && email) {
+      // reset fail counter
+      await this.redisClient.del(`login:fail:${email}`);
+    }
+  }
+
+  async isEmailBlocked(email: string) {
+    const val = await this.redisClient.get(`blocked:email:${email}`);
+    return !!val;
+  }
+
+  // 2FA methods
+  async setup2fa(userId: number) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new BadRequestException('User not found');
+
+    const secret = speakeasy.generateSecret({
+      length: 20,
+      name: `${process.env.TOTP_ISSUER || 'MyCompany'}:${user.email}`,
+    });
+    const qr = await qrcode.toDataURL(secret.otpauth_url || '');
+    // store temp secret in redis for confirmation step (short TTL)
+    await this.redisClient.setex(
+      `2fa:setup:${userId}`,
+      300,
+      String((secret as any).base32 || ''),
+    );
+    return {
+      otpauth_url: secret.otpauth_url || '',
+      qr,
+      base32: secret.base32 || '',
+    };
+  }
+
+  async enable2fa(userId: number, token: string) {
+    const base32 = await this.redisClient.get(`2fa:setup:${userId}`);
+    if (!base32 || typeof base32 !== 'string')
+      throw new BadRequestException('Setup expired');
+    const verified = speakeasy.totp.verify({
+      secret: base32,
+      encoding: 'base32',
+      token,
+      window: Number(process.env.TOTP_WINDOW || 1),
+    });
+    if (!verified) throw new BadRequestException('Invalid token');
+    // encrypt and save secret on user
+    const enc = encrypt(base32);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { is2faEnabled: true, totpSecret: enc },
+    });
+    await this.redisClient.del(`2fa:setup:${userId}`);
+    return { message: '2FA enabled' };
+  }
+
+  async verify2fa(userId: number, token: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user || !user.is2faEnabled || !user.totpSecret)
+      throw new BadRequestException('2FA not enabled');
+    const secret = decrypt(user.totpSecret);
+    const ok = speakeasy.totp.verify({
+      secret,
+      encoding: 'base32',
+      token,
+      window: Number(process.env.TOTP_WINDOW || 1),
+    });
+    return Boolean(ok);
+  }
+
+  async disable2fa(userId: number, token: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user || !user.is2faEnabled || !user.totpSecret)
+      throw new BadRequestException('2FA not enabled');
+    const secret = decrypt(user.totpSecret);
+    const verified = speakeasy.totp.verify({
+      secret,
+      encoding: 'base32',
+      token,
+      window: Number(process.env.TOTP_WINDOW || 1),
+    });
+    if (!verified) throw new BadRequestException('Invalid token');
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { is2faEnabled: false, totpSecret: null },
+    });
+    return { message: '2FA disabled' };
+  }
+
+  // Password policy and history
+  async updatePassword(userId: number, newPassword: string) {
+    const policyError = validatePassword(newPassword);
+    if (policyError)
+      throw new BadRequestException(
+        `Password policy violation: ${policyError}`,
+      );
+
+    // check history
+    const histCount = Number(process.env.PASSWORD_HISTORY_COUNT || 5);
+    const recent = await this.prisma.passwordHistory.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: histCount,
+    });
+    for (const ph of recent) {
+      const match = await bcrypt.compare(newPassword, ph.hash);
+      if (match)
+        throw new BadRequestException('Password already used recently');
+    }
+
+    // proceed: hash new password, update user, push to passwordHistory
+    const hashed = await bcrypt.hash(newPassword, 12);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { password: hashed, passwordChangedAt: new Date() },
+    });
+    await this.prisma.passwordHistory.create({
+      data: { userId, hash: hashed },
+    });
+
+    // trim history > PASSWORD_HISTORY_COUNT
+    const total = await this.prisma.passwordHistory.count({
+      where: { userId },
+    });
+    if (total > histCount) {
+      const toDelete = await this.prisma.passwordHistory.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'asc' },
+        take: total - histCount,
+      });
+      await this.prisma.passwordHistory.deleteMany({
+        where: { id: { in: toDelete.map((t) => t.id) } },
+      });
+    }
+    return { message: 'Password updated' };
+  }
+
+  // Suspicious activity detection
+  async checkSuspiciousActivity(userId: number, ip: string) {
+    const region = getRegionFromIp(ip)?.country || 'unknown';
+    await this.redisClient.sadd(`active_regions:${userId}`, String(region));
+    await this.redisClient.expire(`active_regions:${userId}`, 60 * 60); // 1h
+
+    const regions = await this.redisClient.smembers(`active_regions:${userId}`);
+    if (
+      process.env.SUSPICIOUS_REGION_BLOCK === 'true' &&
+      regions.length >= Number(process.env.SUSPICIOUS_REGION_THRESHOLD || 2)
+    ) {
+      // audit + block or force 2FA
+      await this.prisma.auditLog.create({
+        data: {
+          userId,
+          event: 'SUSPICIOUS_ACTIVITY',
+          ip,
+          meta: { regions },
+        },
+      });
+      throw new ForbiddenException('Suspicious activity detected');
+    }
+  }
+
+  // Enhanced login with security features
+  async loginWithSecurity(
+    dto: LoginDto,
+    meta: { ip?: string; userAgent?: string; deviceName?: string },
+  ) {
+    // Check if email is blocked
+    if (await this.isEmailBlocked(dto.email)) {
+      await this.recordLoginAttempt({
+        email: dto.email,
+        ip: meta.ip,
+        userAgent: meta.userAgent,
+        success: false,
+        reason: 'blocked',
+      });
+      throw new ForbiddenException('Account temporarily blocked');
+    }
+
+    try {
+      const user = await this.validateUser(dto.email, dto.password);
+
+      // Check suspicious activity
+      if (meta.ip) {
+        await this.checkSuspiciousActivity(user.id, meta.ip);
+      }
+
+      // Record successful login attempt
+      await this.recordLoginAttempt({
+        email: dto.email,
+        ip: meta.ip,
+        userAgent: meta.userAgent,
+        success: true,
+        userId: user.id,
+      });
+
+      // Check if 2FA is required
+      if (user.is2faEnabled) {
+        return {
+          requires_2fa: true,
+          user: {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+          },
+        };
+      }
+
+      // Proceed with normal login
+      await this.enforceSessionLimit(user.id);
+      const tokens = await this.generateTokensAndPersist(user, meta);
+
+      await this.prisma.auditLog.create({
+        data: {
+          userId: user.id,
+          event: 'LOGIN',
+          ip: meta.ip,
+          meta: { userAgent: meta.userAgent },
+        },
+      });
+
+      return {
+        access_token: tokens.accessToken,
+        refresh_token: tokens.refreshToken,
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+        },
+      };
+    } catch (error) {
+      // Record failed login attempt
+      await this.recordLoginAttempt({
+        email: dto.email,
+        ip: meta.ip,
+        userAgent: meta.userAgent,
+        success: false,
+        reason: error.message,
+      });
+      throw error;
+    }
+  }
+
   // Legacy methods for compatibility
   async requestReset(dto: RequestResetDto) {
     const user = await this.usersService.findByEmail(dto.email);
@@ -357,8 +642,10 @@ export class AuthService {
     const email = this.resetTokens.get(dto.token);
     if (!email) throw new UnauthorizedException('Invalid token');
 
-    const hashed = await bcrypt.hash(dto.newPassword, 10);
-    await this.usersService.updateByEmail(email, { password: hashed });
+    const user = await this.usersService.findByEmail(email);
+    if (!user) throw new UnauthorizedException('User not found');
+
+    await this.updatePassword(user.id, dto.newPassword);
 
     this.resetTokens.delete(dto.token);
     return { message: 'Password reset successful' };
